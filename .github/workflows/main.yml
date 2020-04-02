@@ -1,0 +1,27 @@
+name: Publish Docker
+on: [push]
+jobs:
+  main:
+    if: github.ref == 'refs/heads/master'
+    name: Publish Docker
+    runs-on: ubuntu-latest
+    needs: main
+    steps:
+      - name: "Checkout source code"
+        uses: "actions/checkout@v1"
+        with:
+          ref: ${{ github.ref }}
+      - name: Login to Github Docker Registry
+        uses: actions/docker/login@master
+        env:
+          DOCKER_REGISTRY_URL: docker.pkg.github.com
+          DOCKER_USERNAME: ${{ github.actor }}
+          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build, tag, and push image to Amazon ECR
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          docker build -t docker.pkg.github.com/edenlabllc/traefik-tower:$IMAGE_TAG .
+          docker push docker.pkg.github.com/edenlabllc/traefik-tower:$IMAGE_TAG
+      - name: Logout of Amazon ECR
+        if: always()
+        run: docker logout
