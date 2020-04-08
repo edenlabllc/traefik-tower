@@ -1,5 +1,6 @@
 FROM golang:1.14-alpine as builder
 
+RUN apk add git
 # Setup
 RUN mkdir -p /go/src/github.com/edenlabllc/traefik-tower
 WORKDIR /go/src/github.com/edenlabllc/traefik-tower
