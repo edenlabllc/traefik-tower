@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  golangci-lint:
+    image: golangci/golangci-lint:latest
+    container_name: golangci-lint
+    volumes:
+      - .:/app
+    command: sh /app/lint.sh

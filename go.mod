@@ -3,14 +3,18 @@ module traefik-tower
 go 1.14
 
 require (
+	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/golang/protobuf v1.3.3 // indirect
+	github.com/gorilla/mux v1.8.0
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.1.0
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/procfs v0.0.10 // indirect
+	github.com/rs/zerolog v1.19.0
+	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.5.0 // indirect
 	github.com/uber/jaeger-client-go v2.22.1+incompatible

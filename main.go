@@ -1,206 +1,122 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
-	"strconv"
-	"strings"
 	"time"
+	"traefik-tower/config"
+	"traefik-tower/handlers"
+	"traefik-tower/pkg/client"
+	"traefik-tower/pkg/gohttp"
+	"traefik-tower/pkg/middelware"
+	"traefik-tower/pkg/tracer"
+	"traefik-tower/services"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-	"github.com/uber/jaeger-lib/metrics/prometheus"
-
+	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	zLog "github.com/rs/zerolog/log"
 	jaegerConf "github.com/uber/jaeger-client-go/config"
 	jaegerlog "github.com/uber/jaeger-client-go/log"
+	"github.com/uber/jaeger-lib/metrics/prometheus"
 )
 
-type authServerResponse struct {
-	Active    bool   `json:"active"`
-	Scope     string `json:"scope,omitempty"`
-	ClientID  string `json:"client_id,omitempty"`
-	Sub       string `json:"sub,omitempty"`
-	Exp       int    `json:"exp,omitempty"`
-	Iat       int    `json:"iat,omitempty"`
-	Iss       string `json:"iss,omitempty"`
-	TokenType string `json:"token_type,omitempty"`
-}
-
+const (
+	HTTPWriteTimeout = 15 * time.Second
+	HTTPReadTimeout  = 15 * time.Second
+)
 
 func main() {
-	port := os.Getenv("PORT")
-	if len(port) < 1 {
-		port = "8000"
-	}
-	debug := os.Getenv("DEBUG")
-	authServerUrlEnv := os.Getenv("AUTH_SERVER_URL")
-
-	if len(authServerUrlEnv) == 0 {
-		log.Fatal("AUTH_SERVER_URL could not be empty")
-
-	}
-
-	authServerUrl, err := url.Parse(authServerUrlEnv)
-	if err != nil || len(authServerUrl.Hostname()) == 0  {
-		log.Fatal("AUTH_SERVER_URL mast contain valid url")
-	}
-
-	cfg, err := jaegerConf.FromEnv()
+	// init config
+	cfg, err := config.FromEnv()
 	if err != nil {
-		log.Fatal(err.Error())
+		zLog.Fatal().Err(err).Msg("init config")
 		return
 	}
 
-	tracingDebug := os.Getenv("TRACING_DEBUG")
+	// check AuthServerURL
+	authURL, err := url.Parse(cfg.AuthServerURL)
+	if err != nil || authURL.Hostname() == "" {
+		zLog.Fatal().Msg("AUTH_SERVER_URL mast contain valid url")
+	}
+
+	// init Jaeger config
+	cfgJaeger, err := jaegerConf.FromEnv()
+	if err != nil {
+		zLog.Fatal().Err(err).Msg("jaegerConf error")
+	}
+
 	var jLogger jaegerlog.Logger
-	if len(tracingDebug) < 1 {
+	if len(cfg.TracingDebug) < 1 {
 		jLogger = jaegerlog.NullLogger
 	}
-	if tracingDebug == "true" {
+	if cfg.TracingDebug == "true" {
 		jLogger = jaegerlog.StdLogger
 	}
 
 	jMetricsFactory := prometheus.New()
 
 	// Initialize tracer with a logger and a metrics factory
-	tracer, closer, err := cfg.NewTracer(
+	jaegerTracer, jaegerCloser, err := cfgJaeger.NewTracer(
 		jaegerConf.Logger(jLogger),
 		jaegerConf.Metrics(jMetricsFactory),
 	)
+
 	if err != nil {
-		log.Fatal(err.Error())
+		zLog.Fatal().Err(err).Msg("jaeger error")
 	}
-	// Set the singleton opentracing.Tracer with the Jaeger tracer.
-	opentracing.SetGlobalTracer(tracer)
-	defer closer.Close()
 
+	defer jaegerCloser.Close()
 
+	// init tracer
+	tr := tracer.NewTracer(jaegerTracer)
 
-	http.HandleFunc("/", auth(authServerUrl))
-	http.HandleFunc("/health", health(authServerUrl))
-	http.Handle("/metrics", promhttp.Handler())
-	if debug == "true" {
-		http.HandleFunc("/200", alwaysSuccess)
-		http.HandleFunc("/404", alwaysFail)
-	}
-	log.Println("Server started at port: " + port)
-	log.Fatal(http.ListenAndServe(":" + port, nil))
-}
-
-
-func jsonResponse(w http.ResponseWriter, req *http.Request, status int, response interface{}, timeStarted time.Time) {
-	js, err := json.Marshal(response)
+	// http client
+	c, err := client.NewClient(cfg.AuthServerURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		zLog.Fatal().Err(err).Msg("http client error")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(js)
-	reqId := "undefined"
-	if traceId := req.Header.Get("Uber-Trace-Id"); len(traceId) > 1 {
-		reqId = traceId
+
+	// sefrvices
+	srv := services.NewService(cfg, c, tr)
+
+	// handlers
+	h := handlers.NewHandlers(cfg, srv)
+
+	routerHandler := mux.NewRouter()
+	if cfg.AuthType == "cognito" {
+		routerHandler.HandleFunc("/", h.Cognito)
+	} else {
+		routerHandler.HandleFunc("/", h.Hydra)
 	}
-	log.Printf( "{\"request-id\": %s, \"status\": %s, \"took\": %s}\n", reqId, strconv.Itoa(status), time.Since(timeStarted))
-}
 
-
-func auth(authServerUrl *url.URL) func(w http.ResponseWriter, req *http.Request) {
-	return func(w http.ResponseWriter, req *http.Request) {
-
-		start := time.Now()
-
-		// Create server span
-		tracer := opentracing.GlobalTracer()
-		spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(req.Header))
-		span := tracer.StartSpan(req.URL.Path, ext.RPCServerOption(spanCtx))
-		ext.SpanKindRPCClient.Set(span)
-		ext.HTTPUrl.Set(span, "/")
-		ext.HTTPMethod.Set(span, "GET")
-		defer span.Finish()
-
-		// Process Authorization Header and parse it to pass to Hydra
-		authorizationHeader := req.Header.Get("Authorization")
-		splitHeader := strings.Split(authorizationHeader, " ")
-		if len(splitHeader) != 2 || splitHeader[0] != "Bearer" {
-			jsonResponse(w, req, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), start)
-			return
-		}
-		data := url.Values{}
-		data.Add("token", splitHeader[1])
-
-		// Crete tracer to trace hydra call
-		clientSpan := tracer.StartSpan("hydra/oauth2/introspect", opentracing.ChildOf(span.Context()))
-		defer clientSpan.Finish()
-		ext.SpanKindRPCClient.Set(clientSpan)
-		ext.HTTPUrl.Set(clientSpan, authServerUrl.String() + "/oauth2/introspect")
-		ext.HTTPMethod.Set(clientSpan, "POST")
-
-
-		client := &http.Client{}
-		r, _ := http.NewRequest("POST", authServerUrl.String() + "/oauth2/introspect", strings.NewReader(data.Encode()))
-
-		// Inject headers to r(equest) obj to
-		tracer.Inject(clientSpan.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
-
-
-		r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		r.Header.Add("X-Forwarded-Proto", "https")
-		r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
-
-		// Make Hydra call and parse response
-		resp, err := client.Do(r)
-		if err != nil {
-			ext.HTTPStatusCode.Set(span, uint16(http.StatusInternalServerError))
-			jsonResponse(w, req, http.StatusInternalServerError, err.Error(), start)
-			return
-		}
-
-		bodyBuffer, _ := ioutil.ReadAll(resp.Body)
-		var authResp authServerResponse
-
-		err = json.Unmarshal(bodyBuffer, &authResp)
-		if err != nil {
-			ext.HTTPStatusCode.Set(span, uint16(http.StatusInternalServerError))
-			jsonResponse(w, req, http.StatusInternalServerError, err.Error(), start)
-			return
-		}
-		ext.HTTPStatusCode.Set(clientSpan, uint16(resp.StatusCode))
-		if !authResp.Active {
-			ext.HTTPStatusCode.Set(span, uint16(http.StatusUnauthorized))
-			jsonResponse(w, req, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), start)
-			return
-		}
-
-		w.Header().Set("X-Consumer-Id", authResp.ClientID)
-		ext.HTTPStatusCode.Set(span, uint16(http.StatusOK))
-		jsonResponse(w, req, http.StatusOK, http.StatusText(http.StatusOK), start)
+	routerHandler.HandleFunc("/health", h.Health())
+	routerHandler.Handle("/metrics", promhttp.Handler())
+	if cfg.Debug {
+		routerHandler.HandleFunc("/200", h.AlwaysSuccess)
+		routerHandler.HandleFunc("/404", h.AlwaysFail)
 	}
-}
 
-func alwaysSuccess(w http.ResponseWriter, req *http.Request) {
-	r, err := httputil.DumpRequest(req, true)
-	if err != nil {
-		log.Fatal(err)
+	s := &http.Server{
+		Handler:      routerHandler,
+		Addr:         fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+		WriteTimeout: HTTPWriteTimeout,
+		ReadTimeout:  HTTPReadTimeout,
 	}
-	fmt.Println(string(r))
-	fmt.Fprint(w, "I am auth")
-}
 
-func alwaysFail(w http.ResponseWriter, req *http.Request) {
-	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-}
+	if cfg.Debug {
+		logger := log.New(os.Stdout, "http: ", log.LstdFlags)
+		s.ErrorLog = logger
+		s.Handler = middelware.Logger(logger, s.Handler)
+	}
 
-func health(serverUrl *url.URL) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		jsonResponse(w, r, http.StatusOK, "", start)
+	go gohttp.Shutdown(s)
+
+	zLog.Info().Msgf("Server started at host:port: [%s:%s]", cfg.Host, cfg.Port)
+
+	if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		zLog.Fatal().Msgf("listenAndServe error: %s", err)
 	}
 }
