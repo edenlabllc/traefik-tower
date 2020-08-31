@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 func NewClient(basePath string) (*HTTPClient, error) {
@@ -26,12 +26,6 @@ func NewClient(basePath string) (*HTTPClient, error) {
 // SetHTTPClient sets *http.Client to current client
 func (c *HTTPClient) SetHTTPClient(client *http.Client) {
 	c.client = client
-}
-
-// SetLog will set/change the output destination.
-// If log file is set paypalsdk will log all requests and responses to this Writer
-func (c *HTTPClient) SetLog(log logrus.FieldLogger) {
-	c.log = log
 }
 
 // Send makes a request to the API, the response body will be
@@ -69,19 +63,17 @@ func (c *HTTPClient) NewRequest(method, url string, payload io.Reader) (*http.Re
 
 // log will dump request and response to the log file
 func (c *HTTPClient) printLog(r *http.Request, resp *http.Response) {
-	if c.log != nil {
-		var (
-			reqDump  string
-			respDump []byte
-		)
+	var (
+		reqDump  string
+		respDump []byte
+	)
 
-		if r != nil {
-			reqDump = fmt.Sprintf("%s %s. Data: %s", r.Method, r.URL.String(), r.Form.Encode())
-		}
-		if resp != nil {
-			respDump, _ = httputil.DumpResponse(resp, true)
-		}
-
-		c.log.Infof(fmt.Sprintf("request: %s\n response: %s\n", reqDump, string(respDump)))
+	if r != nil {
+		reqDump = fmt.Sprintf("%s %s. Data: %s", r.Method, r.URL.String(), r.Form.Encode())
 	}
+	if resp != nil {
+		respDump, _ = httputil.DumpResponse(resp, true)
+	}
+
+	log.Debug().Msgf(fmt.Sprintf("request: %s\n response: %s\n", reqDump, string(respDump)))
 }

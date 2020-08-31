@@ -2,8 +2,6 @@ package client
 
 import (
 	"net/http"
-
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -15,6 +13,5 @@ type (
 	HTTPClient struct {
 		client   *http.Client
 		basePath string
-		log      logrus.FieldLogger
 	}
 )

@@ -107,9 +107,8 @@ func main() {
 	}
 
 	if cfg.Debug {
-		logger := log.New(os.Stdout, "http: ", log.LstdFlags)
-		s.ErrorLog = logger
-		s.Handler = middelware.Logger(logger, s.Handler)
+		s.ErrorLog = log.New(os.Stdout, "http: ", log.LstdFlags)
+		s.Handler = middelware.Logger(s.Handler)
 	}
 
 	go gohttp.Shutdown(s)

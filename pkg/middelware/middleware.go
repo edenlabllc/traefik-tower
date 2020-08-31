@@ -2,14 +2,14 @@ package middelware
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
-	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Logs incoming requests, including response status.
-func Logger(logger *log.Logger, h http.Handler) http.Handler {
+func Logger(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		o := &responseObserver{ResponseWriter: w}
 		h.ServeHTTP(o, r)
@@ -17,14 +17,16 @@ func Logger(logger *log.Logger, h http.Handler) http.Handler {
 		if i := strings.LastIndex(addr, ":"); i != -1 {
 			addr = addr[:i]
 		}
-		logger.Printf("%s - - [%s] %q %d %d %q %q",
-			addr,
-			time.Now().Format("02/Jan/2006:15:04:05 -0700"),
-			fmt.Sprintf("%s %s %s", r.Method, r.URL, r.Proto),
-			o.status,
-			o.written,
-			r.Referer(),
-			r.UserAgent())
+
+		log.Debug().
+			Timestamp().
+			Str("addr", addr).
+			Str("url", fmt.Sprintf("%s %s %s", r.Method, r.URL, r.Proto)).
+			Int("status", o.status).
+			Int64("res_len", o.written).
+			Str("referer", r.Referer()).
+			Str("user_agent", r.UserAgent()).
+			Msg("middleware handlers")
 	})
 }
 
