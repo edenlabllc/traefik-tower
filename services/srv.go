@@ -138,8 +138,9 @@ func (s *Service) CognitoUserInfo(req *http.Request) (*ConsumerID, error) {
 		log.Error().Err(err).Msg("tracer inject span")
 	}
 
-	r.Header.Add("Authorization", fmt.Sprintf("Bearer: %s", splitHeader[1]))
-	r.Header.Add("X-Forwarded-Proto", "https")
+	bearer := "Bearer " + splitHeader[1]
+	r.Header.Set("Authorization", bearer)
+	r.Header.Set("X-Forwarded-Proto", "https")
 
 	rStatusCode, err := s.client.Send(r, &authResp)
 	if err != nil {

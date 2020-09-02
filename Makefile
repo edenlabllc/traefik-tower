@@ -1,7 +1,7 @@
 run:
-	PORT=8080 \
+	PORT=8085 \
 	HOST=localhost \
-	AUTH_SERVER_URL=http://hydra-admin.hydra.svc.cluster.local:4445 \
+	AUTH_SERVER_URL=https://poc-dev.auth.eu-west-1.amazoncognito.com \
 	AUTH_TYPE=cognito \
 	DEBUG=true \
 	TRACING_DEBUG=true \
