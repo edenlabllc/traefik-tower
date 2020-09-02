@@ -46,7 +46,6 @@ func (c *HTTPClient) Send(req *http.Request, response interface{}) (int, error) 
 	}
 	defer resp.Body.Close()
 
-	// TO DO response
 	if response != nil {
 		if err := json.NewDecoder(resp.Body).Decode(response); err != nil {
 			return http.StatusInternalServerError, err
