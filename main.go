@@ -33,7 +33,6 @@ type authServerResponse struct {
 	TokenType string `json:"token_type,omitempty"`
 }
 
-
 func main() {
 	port := os.Getenv("PORT")
 	if len(port) < 1 {
@@ -48,7 +47,7 @@ func main() {
 	}
 
 	authServerUrl, err := url.Parse(authServerUrlEnv)
-	if err != nil || len(authServerUrl.Hostname()) == 0  {
+	if err != nil || len(authServerUrl.Hostname()) == 0 {
 		log.Fatal("AUTH_SERVER_URL mast contain valid url")
 	}
 
@@ -81,8 +80,6 @@ func main() {
 	opentracing.SetGlobalTracer(tracer)
 	defer closer.Close()
 
-
-
 	http.HandleFunc("/", auth(authServerUrl))
 	http.HandleFunc("/health", health(authServerUrl))
 	http.Handle("/metrics", promhttp.Handler())
@@ -91,9 +88,8 @@ func main() {
 		http.HandleFunc("/404", alwaysFail)
 	}
 	log.Println("Server started at port: " + port)
-	log.Fatal(http.ListenAndServe(":" + port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
-
 
 func jsonResponse(w http.ResponseWriter, req *http.Request, status int, response interface{}, timeStarted time.Time) {
 	js, err := json.Marshal(response)
@@ -108,9 +104,8 @@ func jsonResponse(w http.ResponseWriter, req *http.Request, status int, response
 	if traceId := req.Header.Get("Uber-Trace-Id"); len(traceId) > 1 {
 		reqId = traceId
 	}
-	log.Printf( "{\"request-id\": %s, \"status\": %s, \"took\": %s}\n", reqId, strconv.Itoa(status), time.Since(timeStarted))
+	log.Printf("{\"request-id\": %s, \"status\": %s, \"took\": %s}\n", reqId, strconv.Itoa(status), time.Since(timeStarted))
 }
-
 
 func auth(authServerUrl *url.URL) func(w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
@@ -126,6 +121,11 @@ func auth(authServerUrl *url.URL) func(w http.ResponseWriter, req *http.Request)
 		ext.HTTPMethod.Set(span, "GET")
 		defer span.Finish()
 
+		if req.Method == http.MethodOptions {
+			jsonResponse(w, req, http.StatusOK, "", start)
+			return
+		}
+
 		// Process Authorization Header and parse it to pass to Hydra
 		authorizationHeader := req.Header.Get("Authorization")
 		splitHeader := strings.Split(authorizationHeader, " ")
@@ -140,16 +140,14 @@ func auth(authServerUrl *url.URL) func(w http.ResponseWriter, req *http.Request)
 		clientSpan := tracer.StartSpan("hydra/oauth2/introspect", opentracing.ChildOf(span.Context()))
 		defer clientSpan.Finish()
 		ext.SpanKindRPCClient.Set(clientSpan)
-		ext.HTTPUrl.Set(clientSpan, authServerUrl.String() + "/oauth2/introspect")
+		ext.HTTPUrl.Set(clientSpan, authServerUrl.String()+"/oauth2/introspect")
 		ext.HTTPMethod.Set(clientSpan, "POST")
 
-
 		client := &http.Client{}
-		r, _ := http.NewRequest("POST", authServerUrl.String() + "/oauth2/introspect", strings.NewReader(data.Encode()))
+		r, _ := http.NewRequest("POST", authServerUrl.String()+"/oauth2/introspect", strings.NewReader(data.Encode()))
 
 		// Inject headers to r(equest) obj to
 		tracer.Inject(clientSpan.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
-
 
 		r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Add("X-Forwarded-Proto", "https")
