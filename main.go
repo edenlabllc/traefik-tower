@@ -121,11 +121,6 @@ func auth(authServerUrl *url.URL) func(w http.ResponseWriter, req *http.Request)
 		ext.HTTPMethod.Set(span, "GET")
 		defer span.Finish()
 
-		if req.Method == http.MethodOptions {
-			jsonResponse(w, req, http.StatusOK, "", start)
-			return
-		}
-
 		// Process Authorization Header and parse it to pass to Hydra
 		authorizationHeader := req.Header.Get("Authorization")
 		splitHeader := strings.Split(authorizationHeader, " ")
