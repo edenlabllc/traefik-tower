@@ -130,17 +130,17 @@ func (s *Service) CognitoUserInfo(req *http.Request) (*ConsumerID, error) {
 	if err != nil {
 		log.Error().Err(err).Msg("tracer child span")
 	}
-	s.tracer.ExtURL(s.tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s/%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
+	s.tracer.ExtURL(s.tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
+
+	bearer := "Bearer " + splitHeader[1]
+	r.Header.Set("Authorization", bearer)
+	r.Header.Set("X-Forwarded-Proto", "https")
 
 	// Inject headers to r(equest) obj to
 	err = s.tracer.GetTracer().Inject(s.tracer.GetChildSpan().Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 	if err != nil {
 		log.Error().Err(err).Msg("tracer inject span")
 	}
-
-	bearer := "Bearer " + splitHeader[1]
-	r.Header.Set("Authorization", bearer)
-	r.Header.Set("X-Forwarded-Proto", "https")
 
 	rStatusCode, err := s.client.Send(r, &authResp)
 	if err != nil {
