@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,8 +18,14 @@ func NewClient(basePath string) (*HTTPClient, error) {
 		return nil, errors.New("APIBase are required to create a Client")
 	}
 
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // nolint: gosec
+		},
+	}
+
 	return &HTTPClient{
-		client:   &http.Client{},
+		client:   &http.Client{Transport: tr},
 		basePath: basePath,
 	}, nil
 }

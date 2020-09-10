@@ -142,6 +142,12 @@ func (s *Service) CognitoUserInfo(req *http.Request) (*ConsumerID, error) {
 		log.Error().Err(err).Msg("tracer inject span")
 	}
 
+	if s.cfg.Debug {
+		for name, values := range r.Header {
+			log.Debug().Msgf("header: %v => %#v", name, values)
+		}
+	}
+
 	rStatusCode, err := s.client.Send(r, &authResp)
 	if err != nil {
 		return nil, err
