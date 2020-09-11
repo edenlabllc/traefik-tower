@@ -17,7 +17,7 @@ func NewClient(basePath string) (*HTTPClient, error) {
 	// check AuthServerURL
 	authURL, err := url.Parse(basePath)
 	if err != nil || authURL.Hostname() == "" {
-		return nil, fmt.Errorf("AUTH_SERVER_URL mast contain valid url")
+		return nil, fmt.Errorf("AUTH_SERVER_URL must contain valid url")
 	}
 
 	tr := &http.Transport{

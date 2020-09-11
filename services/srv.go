@@ -195,7 +195,7 @@ func (s *Service) CognitoAWSUserInfo(req *http.Request) (*ConsumerID, error) {
 
 	// check used context
 	if s.cfg.IsAWSContext() {
-		user, err = s.CognitoClient.GetUserWithContext(context.TODO(), &cognito.GetUserInput{AccessToken: aws.String(splitHeader[1])})
+		user, err = s.CognitoClient.GetUserWithContext(context.Background(), &cognito.GetUserInput{AccessToken: aws.String(splitHeader[1])})
 		if err != nil {
 			return nil, err
 		}
