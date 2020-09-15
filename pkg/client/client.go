@@ -3,9 +3,9 @@ package client
 import (
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"net/url"
 
 	"net/http"
 	"net/http/httputil"
@@ -14,8 +14,10 @@ import (
 )
 
 func NewClient(basePath string) (*HTTPClient, error) {
-	if basePath == "" {
-		return nil, errors.New("APIBase are required to create a Client")
+	// check AuthServerURL
+	authURL, err := url.Parse(basePath)
+	if err != nil || authURL.Hostname() == "" {
+		return nil, fmt.Errorf("AUTH_SERVER_URL must contain valid url")
 	}
 
 	tr := &http.Transport{
@@ -63,8 +65,8 @@ func (c *HTTPClient) Send(req *http.Request, response interface{}) (int, error) 
 }
 
 // NewRequest constructs a request
-func (c *HTTPClient) NewRequest(method, url string, payload io.Reader) (*http.Request, error) {
-	return http.NewRequest(method, url, payload)
+func (c *HTTPClient) NewRequest(method, uPath string, payload io.Reader) (*http.Request, error) {
+	return http.NewRequest(method, uPath, payload)
 }
 
 // log will dump request and response to the log file

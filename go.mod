@@ -3,6 +3,7 @@ module traefik-tower
 go 1.14
 
 require (
+	github.com/aws/aws-sdk-go v1.34.20
 	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/golang/protobuf v1.3.3 // indirect
@@ -16,7 +17,6 @@ require (
 	github.com/rs/zerolog v1.19.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/objx v0.2.0 // indirect
-	github.com/stretchr/testify v1.5.0 // indirect
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible
 	go.uber.org/atomic v1.6.0 // indirect

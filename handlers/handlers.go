@@ -52,6 +52,18 @@ func (h *Handlers) Cognito(w http.ResponseWriter, req *http.Request) {
 	h.jsonResponse(w, req, http.StatusOK, http.StatusText(http.StatusOK))
 }
 
+// Cognito AWS auth
+func (h *Handlers) CognitoAWS(w http.ResponseWriter, req *http.Request) {
+	id, err := h.srv.CognitoAWSUserInfo(req)
+	if err != nil {
+		h.cError(w, req, err)
+		return
+	}
+
+	w.Header().Set("X-Consumer-Id", id.ToString())
+	h.jsonResponse(w, req, http.StatusOK, http.StatusText(http.StatusOK))
+}
+
 // AlwaysSuccess
 func (h *Handlers) AlwaysSuccess(w http.ResponseWriter, req *http.Request) {
 	r, err := httputil.DumpRequest(req, true)
