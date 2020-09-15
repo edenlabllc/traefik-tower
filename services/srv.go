@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"traefik-tower/pkg/client"
 	"traefik-tower/pkg/tracer"
 
+	"github.com/aws/aws-sdk-go/aws"
+	cognito "github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/opentracing/opentracing-go"
 	"github.com/rs/zerolog/log"
 )
@@ -27,20 +30,27 @@ func (cID ConsumerID) ToString() string {
 type CError error
 
 var (
-	ErrUnauthorized CError = errors.New(http.StatusText(http.StatusUnauthorized))
+	ErrUnauthorized        CError = errors.New(http.StatusText(http.StatusUnauthorized))
+	ErrInternalServerError CError = errors.New(http.StatusText(http.StatusInternalServerError))
 )
 
 type Service struct {
-	client *client.HTTPClient
-	tracer tracer.ITracer
-	cfg    *config.Config
+	CognitoClient *cognito.CognitoIdentityProvider
+	client        *client.HTTPClient
+	tracer        tracer.ITracer
+	cfg           *config.Config
 }
 
-func NewService(cfg *config.Config, c *client.HTTPClient, tr tracer.ITracer) *Service {
+func NewService(
+	cfg *config.Config,
+	c *client.HTTPClient,
+	tr tracer.ITracer,
+	cn *cognito.CognitoIdentityProvider) *Service {
 	return &Service{
-		cfg:    cfg,
-		client: c,
-		tracer: tr,
+		CognitoClient: cn,
+		cfg:           cfg,
+		client:        c,
+		tracer:        tr,
 	}
 }
 
@@ -54,12 +64,11 @@ func (s *Service) HydraIntrospect(req *http.Request) (*ConsumerID, error) {
 	s.tracer.Parent(req)
 	s.tracer.ExtURL(s.tracer.GetParentSpan(), req.Method, "/")
 
-	// Process Authorization Header and parse it to pass to Hydra
-	authorizationHeader := req.Header.Get("Authorization")
-	splitHeader := strings.Split(authorizationHeader, " ")
-	if len(splitHeader) != 2 || splitHeader[0] != AuthBearer {
-		return nil, ErrUnauthorized
+	splitHeader, err := checkAuthBearer(req)
+	if err != nil {
+		return nil, err
 	}
+
 	data := url.Values{}
 	data.Add("token", splitHeader[1])
 
@@ -113,11 +122,9 @@ func (s *Service) CognitoUserInfo(req *http.Request) (*ConsumerID, error) {
 	s.tracer.Parent(req)
 	s.tracer.ExtURL(s.tracer.GetParentSpan(), req.Method, "/")
 
-	// Process Authorization Header and parse it to pass to Hydra
-	authorizationHeader := req.Header.Get("Authorization")
-	splitHeader := strings.Split(authorizationHeader, " ")
-	if len(splitHeader) != 2 || splitHeader[0] != "Bearer" {
-		return nil, ErrUnauthorized
+	splitHeader, err := checkAuthBearer(req)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO http request
@@ -164,4 +171,76 @@ func (s *Service) CognitoUserInfo(req *http.Request) (*ConsumerID, error) {
 	s.tracer.ExtStatus(s.tracer.GetParentSpan(), http.StatusOK)
 
 	return &cID, nil
+}
+
+func (s *Service) CognitoAWSUserInfo(req *http.Request) (*ConsumerID, error) {
+	defer s.tracer.Finish()
+	var (
+		err  error
+		user *cognito.GetUserOutput
+	)
+
+	s.tracer.Parent(req)
+	s.tracer.ExtURL(s.tracer.GetParentSpan(), req.Method, "/")
+
+	splitHeader, err := checkAuthBearer(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.CognitoClient == nil {
+		s.tracer.ExtStatus(s.tracer.GetParentSpan(), http.StatusInternalServerError)
+		return nil, ErrInternalServerError
+	}
+
+	// check used context
+	if s.cfg.IsAWSContext() {
+		user, err = s.CognitoClient.GetUserWithContext(context.Background(), &cognito.GetUserInput{AccessToken: aws.String(splitHeader[1])})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		user, err = s.CognitoClient.GetUser(&cognito.GetUserInput{AccessToken: aws.String(splitHeader[1])})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if s.cfg.Debug {
+		log.Debug().Msgf("userInfo: %#v", user)
+	}
+
+	err = s.tracer.Child(req)
+	if err != nil {
+		log.Error().Err(err).Msg("tracer child span")
+	}
+	s.tracer.ExtURL(s.tracer.GetChildSpan(), "GET", "/oauth2/userInfo")
+
+	// Inject headers to r(equest) obj to
+	err = s.tracer.GetTracer().Inject(s.tracer.GetChildSpan().Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(req.Header))
+	if err != nil {
+		log.Error().Err(err).Msg("tracer inject span")
+	}
+
+	if user.Username == nil {
+		s.tracer.ExtStatus(s.tracer.GetParentSpan(), http.StatusUnauthorized)
+		return nil, ErrUnauthorized
+	}
+
+	cID := ConsumerID(aws.StringValue(user.Username))
+	s.tracer.ExtStatus(s.tracer.GetParentSpan(), http.StatusOK)
+
+	return &cID, nil
+}
+
+// Process Authorization Header
+func checkAuthBearer(req *http.Request) ([]string, error) {
+	var splitHeader []string
+	authorizationHeader := req.Header.Get("Authorization")
+	splitHeader = strings.Split(authorizationHeader, " ")
+	if len(splitHeader) != 2 || splitHeader[0] != AuthBearer {
+		return splitHeader, ErrUnauthorized
+	}
+
+	return splitHeader, nil
 }

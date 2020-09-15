@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 	"traefik-tower/config"
@@ -15,7 +15,11 @@ import (
 	"traefik-tower/pkg/tracer"
 	"traefik-tower/services"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	cognito "github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 	"github.com/gorilla/mux"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	zLog "github.com/rs/zerolog/log"
 	jaegerConf "github.com/uber/jaeger-client-go/config"
@@ -29,6 +33,10 @@ const (
 )
 
 func main() {
+	var (
+		httpClient *client.HTTPClient
+		cn         *cognito.CognitoIdentityProvider
+	)
 	// init config
 	cfg, err := config.FromEnv()
 	if err != nil {
@@ -36,34 +44,15 @@ func main() {
 		return
 	}
 
-	// check AuthServerURL
-	authURL, err := url.Parse(cfg.AuthServerURL)
-	if err != nil || authURL.Hostname() == "" {
-		zLog.Fatal().Msg("AUTH_SERVER_URL mast contain valid url")
+	if cfg.IsAuthServiceURL() {
+		// http client
+		httpClient, err = client.NewClient(cfg.AuthServerURL)
+		if err != nil {
+			zLog.Fatal().Err(err).Msg("http client error")
+		}
 	}
-
-	// init Jaeger config
-	cfgJaeger, err := jaegerConf.FromEnv()
-	if err != nil {
-		zLog.Fatal().Err(err).Msg("jaegerConf error")
-	}
-
-	var jLogger jaegerlog.Logger
-	if len(cfg.TracingDebug) < 1 {
-		jLogger = jaegerlog.NullLogger
-	}
-	if cfg.TracingDebug == "true" {
-		jLogger = jaegerlog.StdLogger
-	}
-
-	jMetricsFactory := prometheus.New()
-
 	// Initialize tracer with a logger and a metrics factory
-	jaegerTracer, jaegerCloser, err := cfgJaeger.NewTracer(
-		jaegerConf.Logger(jLogger),
-		jaegerConf.Metrics(jMetricsFactory),
-	)
-
+	jaegerTracer, jaegerCloser, err := tracing(cfg)
 	if err != nil {
 		zLog.Fatal().Err(err).Msg("jaeger error")
 	}
@@ -73,22 +62,26 @@ func main() {
 	// init tracer
 	tr := tracer.NewTracer(jaegerTracer)
 
-	// http client
-	c, err := client.NewClient(cfg.AuthServerURL)
-	if err != nil {
-		zLog.Fatal().Err(err).Msg("http client error")
+	if !cfg.IsAuthServiceURL() {
+		cn, err = cognitoAwsConnected(cfg)
+		if err != nil {
+			zLog.Fatal().Err(err).Msg("cognitoAwsConnected error")
+		}
 	}
 
 	// sefrvices
-	srv := services.NewService(cfg, c, tr)
+	srv := services.NewService(cfg, httpClient, tr, cn)
 
 	// handlers
 	h := handlers.NewHandlers(cfg, srv)
-
 	routerHandler := mux.NewRouter()
-	if cfg.AuthType == "cognito" {
+	switch cfg.AuthType {
+	case "cognito":
 		routerHandler.HandleFunc("/", h.Cognito)
-	} else {
+	case "cognito-aws":
+		routerHandler.HandleFunc("/", h.CognitoAWS)
+	case "hydra":
+	default:
 		routerHandler.HandleFunc("/", h.Hydra)
 	}
 
@@ -118,4 +111,52 @@ func main() {
 	if err := s.ListenAndServe(); err != http.ErrServerClosed {
 		zLog.Fatal().Msgf("listenAndServe error: %s", err)
 	}
+}
+
+// Cognito AWS Connected
+func cognitoAwsConnected(cfg *config.Config) (*cognito.CognitoIdentityProvider, error) {
+	sessionParams := session.Options{
+		Config: aws.Config{Region: aws.String(cfg.AwsRegion)},
+	}
+	if cfg.AwsProfile != "" {
+		sessionParams.Profile = cfg.AwsProfile
+	}
+
+	sess, err := session.NewSessionWithOptions(sessionParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return cognito.New(sess), nil
+}
+
+// init tracing
+func tracing(cfg *config.Config) (opentracing.Tracer, io.Closer, error) {
+	var jLogger jaegerlog.Logger
+	// init Jaeger config
+	cfgJaeger, err := jaegerConf.FromEnv()
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cfg.TracingDebug) < 1 {
+		jLogger = jaegerlog.NullLogger
+	}
+	if cfg.TracingDebug == "true" {
+		jLogger = jaegerlog.StdLogger
+	}
+
+	// prometheus
+	jMetricsFactory := prometheus.New()
+
+	// Initialize tracer with a logger and a metrics factory
+	jaegerTracer, jaegerCloser, err := cfgJaeger.NewTracer(
+		jaegerConf.Logger(jLogger),
+		jaegerConf.Metrics(jMetricsFactory),
+	)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return jaegerTracer, jaegerCloser, nil
 }
