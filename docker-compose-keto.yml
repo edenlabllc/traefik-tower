@@ -1,0 +1,18 @@
+version: "3.3"
+
+services:
+  keto:
+    image: "oryd/keto:v0.5.6"
+    container_name: "hydra-keto"
+    command: "serve --config /.keto/config.yaml"
+    ports:
+      - "4466:4466"
+    environment:
+      - dsn=memory
+    volumes:
+      - "./.keto/config.yaml:/.keto/config.yaml:rw"
+    networks:
+      - traefik-tower
+
+networks:
+  traefik-tower:
