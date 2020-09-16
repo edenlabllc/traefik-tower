@@ -5,8 +5,10 @@ import (
 )
 
 const (
-	IntrospectHydraPath = "/oauth2/introspect"
-	UserInfoCognitoPath = "/oauth2/userInfo"
+	IntrospectHydraPath       = "/oauth2/introspect"
+	ClientsIDHydraPath        = "/clients/{id}"
+	UserInfoCognitoPath       = "/oauth2/userInfo"
+	KetoEnginesAcpGlobAllowed = "/engines/acp/ory/glob/allowed"
 )
 
 type (

@@ -1,5 +1,9 @@
 package services
 
+const (
+	MetadataRoleName = "role"
+)
+
 type authCognitoServiceResponse struct {
 	Sub               string `json:"sub"`
 	Name              string `json:"name,omitempty"`
@@ -18,4 +22,27 @@ type authHydraServerResponse struct {
 	Iat       int    `json:"iat,omitempty"`
 	Iss       string `json:"iss,omitempty"`
 	TokenType string `json:"token_type,omitempty"`
+}
+
+type HydraClientInfoResponse struct {
+	ClientID string                 `json:"client_id"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+func (hcir *HydraClientInfoResponse) GetRole() string {
+	if rn, ok := hcir.Metadata[MetadataRoleName]; ok {
+		return rn.(string)
+	}
+
+	return ""
+}
+
+type authHydraKetoAllowedRequest struct {
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
+	Subject  string `json:"subject"`
+}
+
+type authHydraKetoAllowedResponse struct {
+	Allowed bool `json:"allowed"`
 }

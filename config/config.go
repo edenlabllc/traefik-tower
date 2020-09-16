@@ -8,6 +8,8 @@ type Config struct {
 	Port               string `env:"PORT" envDefault:"8000"`
 	Host               string `env:"HOST" envDefault:"0.0.0.0"`
 	AuthServerURL      string `env:"AUTH_SERVER_URL" envDefault:""`
+	KetoURL            string `env:"KETO_URL" envDefault:""`
+	KetoResource       string `env:"KETO_RESOURCE" envDefault:""`
 	AuthType           string `env:"AUTH_TYPE"`
 	AwsRegion          string `env:"AWS_REGION" envDefault:"eu-west-1"`
 	AwsProfile         string `env:"AWS_PROFILE" envDefault:""`

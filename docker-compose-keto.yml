@@ -1,6 +1,50 @@
 version: "3.3"
 
 services:
+  hydra-migrate:
+    image: "oryd/hydra:v1.7.4"
+    container_name: "hydra-migrate"
+    command: "migrate sql --yes postgres://hydra:secret@postgresd:5432/hydra?sslmode=disable"
+    networks:
+      - traefik-tower
+
+  hydra:
+    image: "oryd/hydra:v1.7.4"
+    container_name: "hydra"
+    command: "serve all --skip-tls-verify --dangerous-force-http"
+    links:
+      - postgresd:postgresd
+    volumes:
+      - "./docker-config/hydra/config.yaml:/.hydra.yml"
+      - hydravolume:/root
+    networks:
+      - traefik-tower
+    ports:
+      - "4444:4444"
+      - "4445:4445"
+    environment:
+      - LOG_LEVEL=info
+      - SYSTEM_SECRET=system-secret-pwd
+      - FORCE_ROOT_CLIENT_CREDENTIALS=admin:demo-password
+      - ACCESS_TOKEN_LIFESPAN=access_token_lifespan
+      - ID_TOKEN_LIFESPAN=id_token_lifespan
+      - AUTHORIZE_CODE_LIFESPAN=authorize_code_lifespan
+    restart: unless-stopped
+
+  postgresd:
+    container_name: "postgresd"
+    image: postgres:9.6
+    ports:
+      - "5432:5432"
+    networks:
+      - traefik-tower
+    volumes:
+      - hydrapostgresd:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=hydra
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=hydra
+
   keto:
     image: "oryd/keto:v0.5.6"
     container_name: "hydra-keto"
@@ -10,9 +54,15 @@ services:
     environment:
       - dsn=memory
     volumes:
-      - "./.keto/config.yaml:/.keto/config.yaml:rw"
+      - "./docker-config/keto/config.yaml:/.keto/config.yaml:rw"
     networks:
       - traefik-tower
 
 networks:
   traefik-tower:
+
+volumes:
+  hydravolume:
+    driver: local
+  hydrapostgresd:
+    driver: local

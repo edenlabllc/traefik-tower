@@ -12,6 +12,8 @@ type ITracer interface {
 	GetTracer() opentracing.Tracer
 	GetParentSpan() opentracing.Span
 	GetChildSpan() opentracing.Span
+	IsParentSpan() bool
+	IsChildSpan() bool
 
 	Parent(req *http.Request)
 	Child(req *http.Request) error
@@ -36,11 +38,21 @@ func NewTracer(tracer opentracing.Tracer) *Tracer {
 func (t *Tracer) Finish() {
 	if t.parentSpan != nil {
 		t.parentSpan.Finish()
+		t.parentSpan = nil
 	}
 
 	if t.childSpan != nil {
 		t.childSpan.Finish()
+		t.childSpan = nil
 	}
+}
+
+func (t *Tracer) IsParentSpan() bool {
+	return t.parentSpan != nil
+}
+
+func (t *Tracer) IsChildSpan() bool {
+	return t.childSpan != nil
 }
 
 func (t *Tracer) Parent(req *http.Request) {

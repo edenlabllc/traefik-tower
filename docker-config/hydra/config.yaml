@@ -1,0 +1,27 @@
+ttl:
+  access_token: 1h
+log:
+  level: debug
+  format: json
+  leak_sensitive_values: true
+dsn: postgres://hydra:secret@postgresd:5432/hydra?sslmode=disable
+serve:
+  public:
+    port: 4444
+    host: 0.0.0.0
+    access_log:
+      disable_for_health: true
+  admin:
+    port: 4445
+    host: 0.0.0.0
+    access_log:
+      disable_for_health: true
+secrets: {}
+urls:
+  self:
+    issuer: https://localhost:4444/
+    public: https://localhost:4444/
+
+#autoMigrate: true
+#dangerousForceHttp: true
+#dangerousAllowInsecureRedirectUrls: false

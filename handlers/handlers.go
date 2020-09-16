@@ -30,6 +30,7 @@ func NewHandlers(cfg *config.Config, srv *services.Service) *Handlers {
 
 // Hydra Introspect
 func (h *Handlers) Hydra(w http.ResponseWriter, req *http.Request) {
+	defer h.srv.Tracer.Finish()
 	id, err := h.srv.HydraIntrospect(req)
 	if err != nil {
 		h.cError(w, req, err)
@@ -40,8 +41,37 @@ func (h *Handlers) Hydra(w http.ResponseWriter, req *http.Request) {
 	h.jsonResponse(w, req, http.StatusOK, http.StatusText(http.StatusOK))
 }
 
+// HydraKeto Introspect
+func (h *Handlers) HydraKeto(w http.ResponseWriter, req *http.Request) {
+	defer h.srv.Tracer.Finish()
+	// check hydra token
+	cID, err := h.srv.HydraIntrospect(req)
+	if err != nil {
+		h.cError(w, req, err)
+		return
+	}
+
+	// get hydra client info
+	rn, err := h.srv.HydraClient(req, cID.ToString())
+	if err != nil {
+		h.cError(w, req, err)
+		return
+	}
+
+	// check resource hydra-keto
+	err = h.srv.HydraKetoAllowed(req, rn.GetRole())
+	if err != nil {
+		h.cError(w, req, err)
+		return
+	}
+
+	w.Header().Set("X-Consumer-Id", cID.ToString())
+	h.jsonResponse(w, req, http.StatusOK, http.StatusText(http.StatusOK))
+}
+
 // Cognito auth
 func (h *Handlers) Cognito(w http.ResponseWriter, req *http.Request) {
+	defer h.srv.Tracer.Finish()
 	id, err := h.srv.CognitoUserInfo(req)
 	if err != nil {
 		h.cError(w, req, err)
@@ -54,6 +84,7 @@ func (h *Handlers) Cognito(w http.ResponseWriter, req *http.Request) {
 
 // Cognito AWS auth
 func (h *Handlers) CognitoAWS(w http.ResponseWriter, req *http.Request) {
+	defer h.srv.Tracer.Finish()
 	id, err := h.srv.CognitoAWSUserInfo(req)
 	if err != nil {
 		h.cError(w, req, err)
