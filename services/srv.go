@@ -212,7 +212,6 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 	authRequest.Resource = resource
 
 	if s.cfg.Debug {
-		log.Debug().Msgf("ROOT: request url: %v", req.URL)
 		log.Debug().Msgf("HydraKetoAllowed::authRequest %v", authRequest)
 	}
 
