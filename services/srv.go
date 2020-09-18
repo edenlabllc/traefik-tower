@@ -182,6 +182,15 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 		resource    string
 	)
 
+	if s.cfg.Debug {
+		for name, headers := range req.Header {
+			name = strings.ToLower(name)
+			for _, h := range headers {
+				log.Debug().Msgf("header: %v => %v", name, h)
+			}
+		}
+	}
+
 	if !s.Tracer.IsParentSpan() {
 		s.Tracer.Parent(req)
 		s.Tracer.ExtURL(s.Tracer.GetParentSpan(), req.Method, client.KetoEnginesAcpGlobAllowed)
