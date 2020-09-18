@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -62,6 +63,22 @@ func (c *HTTPClient) Send(req *http.Request, response interface{}) (int, error) 
 	}
 
 	return resp.StatusCode, nil
+}
+
+// NewRequest constructs a request format payload json
+func (c *HTTPClient) NewRequestJSON(method, uPath string, payload interface{}) (*http.Request, error) {
+	var buf io.Reader
+	if payload != nil {
+		var b []byte
+		b, err := json.Marshal(&payload)
+		if err != nil {
+			return nil, err
+		}
+
+		buf = bytes.NewBuffer(b)
+	}
+
+	return http.NewRequest(method, uPath, buf)
 }
 
 // NewRequest constructs a request

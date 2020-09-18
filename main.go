@@ -80,7 +80,8 @@ func main() {
 		routerHandler.HandleFunc("/", h.Cognito)
 	case "cognito-aws":
 		routerHandler.HandleFunc("/", h.CognitoAWS)
-	case "hydra":
+	case "hydra-keto":
+		routerHandler.HandleFunc("/", h.HydraKeto)
 	default:
 		routerHandler.HandleFunc("/", h.Hydra)
 	}
