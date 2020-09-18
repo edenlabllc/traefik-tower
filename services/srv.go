@@ -179,6 +179,7 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 		err         error
 		authRequest authHydraKetoAllowedRequest
 		authResp    authHydraKetoAllowedResponse
+		resource    string
 	)
 
 	if !s.Tracer.IsParentSpan() {
@@ -193,9 +194,16 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 		return ErrUnauthorized
 	}
 
+	rPath := strings.ReplaceAll(strings.Trim(req.URL.Path, "/"), `/`, `:`)
+	if rPath == "" {
+		resource = "home"
+	} else {
+		resource = rPath
+	}
+
 	authRequest.Action = req.Method
 	authRequest.Subject = subject
-	authRequest.Resource = s.cfg.KetoResource
+	authRequest.Resource = resource
 
 	if s.cfg.Debug {
 		log.Debug().Msgf("ROOT: request url: %v", req.URL)
