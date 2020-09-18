@@ -19,7 +19,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const AuthBearer = "Bearer"
+const (
+	AuthBearer          = "Bearer"
+	HeaderXForwardedURI = "x-forwarded-uri"
+)
 
 type ConsumerID string
 
@@ -180,16 +183,8 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 		authRequest authHydraKetoAllowedRequest
 		authResp    authHydraKetoAllowedResponse
 		resource    string
+		forwardPath string
 	)
-
-	if s.cfg.Debug {
-		for name, headers := range req.Header {
-			name = strings.ToLower(name)
-			for _, h := range headers {
-				log.Debug().Msgf("header: %v => %v", name, h)
-			}
-		}
-	}
 
 	if !s.Tracer.IsParentSpan() {
 		s.Tracer.Parent(req)
@@ -203,7 +198,9 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 		return ErrUnauthorized
 	}
 
-	rPath := strings.ReplaceAll(strings.Trim(req.URL.Path, "/"), `/`, `:`)
+	forwardPath = getHeader(req, HeaderXForwardedURI)
+
+	rPath := strings.ReplaceAll(strings.Trim(forwardPath, "/"), `/`, `:`)
 	if rPath == "" {
 		resource = "home"
 	} else {
