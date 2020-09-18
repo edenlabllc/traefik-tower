@@ -84,7 +84,7 @@ func (s *Service) HydraIntrospect(req *http.Request) (*ConsumerID, error) {
 	if err != nil {
 		log.Error().Err(err).Msg("tracer child span")
 	}
-	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s/%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
+	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
 
 	// Inject headers to r(equest) obj to
 	err = s.Tracer.GetTracer().Inject(s.Tracer.GetChildSpan().Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
@@ -144,7 +144,7 @@ func (s *Service) HydraClient(req *http.Request, cID string) (HydraClientInfoRes
 	if err != nil {
 		log.Error().Err(err).Msg("tracer child span")
 	}
-	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s/%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
+	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
 
 	// Inject headers to r(equest) obj to
 	err = s.Tracer.GetTracer().Inject(s.Tracer.GetChildSpan().Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
@@ -225,7 +225,7 @@ func (s *Service) HydraKetoAllowed(req *http.Request, subject string) error {
 	if err != nil {
 		log.Error().Err(err).Msg("tracer child span")
 	}
-	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s/%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
+	s.Tracer.ExtURL(s.Tracer.GetChildSpan(), r.Method, fmt.Sprintf("%s://%s%s", r.URL.Scheme, r.URL.Host, r.URL.Path))
 
 	// Inject headers to r(equest) obj to
 	err = s.Tracer.GetTracer().Inject(s.Tracer.GetChildSpan().Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
