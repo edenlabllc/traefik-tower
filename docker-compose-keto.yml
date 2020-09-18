@@ -35,7 +35,7 @@ services:
     container_name: "postgresd"
     image: postgres:9.6
     ports:
-      - "5432:5432"
+      - "15432:5432"
     networks:
       - traefik-tower
     volumes:
@@ -45,14 +45,30 @@ services:
       - POSTGRES_PASSWORD=secret
       - POSTGRES_DB=hydra
 
+  postgresd_keto:
+    container_name: "postgresd_keto"
+    image: postgres:9.6
+    ports:
+      - "25432:5432"
+    networks:
+      - traefik-tower
+    volumes:
+      - hydrapostgresdketo:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=keto
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=keto
+
   keto:
     image: "oryd/keto:v0.5.6"
     container_name: "hydra-keto"
     command: "serve --config /.keto/config.yaml"
+    links:
+      - postgresd_keto:postgresd_keto
     ports:
       - "4466:4466"
     environment:
-      - dsn=memory
+      - dsn=postgres://keto:password@postgresd_keto:5432/keto
     volumes:
       - "./docker-config/keto/config.yaml:/.keto/config.yaml:rw"
     networks:
@@ -65,4 +81,6 @@ volumes:
   hydravolume:
     driver: local
   hydrapostgresd:
+    driver: local
+  hydrapostgresdketo:
     driver: local

@@ -17,7 +17,7 @@
 # - Windows Command Line (CMD):
 #    > set DSN=<value>
 #
-dsn: memory
+dsn: postgres://keto:password@postgresd_keto:5432/keto
 
 ## HTTP REST API ##
 #
