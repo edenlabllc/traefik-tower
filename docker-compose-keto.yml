@@ -1,6 +1,19 @@
 version: "3.3"
 
 services:
+  keto-migrate:
+    image: "oryd/keto:v0.5.6"
+    container_name: "hydra-keto-migrate"
+    links:
+      - postgresd_keto:postgresd_keto
+    environment:
+      - LOG_LEVEL=debug
+    networks:
+      - traefik-tower
+    command:
+      migrate sql postgres://keto:password@postgresd_keto:5432/keto
+    restart: on-failure
+
   hydra-migrate:
     image: "oryd/hydra:v1.7.4"
     container_name: "hydra-migrate"
@@ -63,6 +76,8 @@ services:
     image: "oryd/keto:v0.5.6"
     container_name: "hydra-keto"
     command: "serve --config /.keto/config.yaml"
+    depends_on:
+      - keto-migrate
     links:
       - postgresd_keto:postgresd_keto
     ports:

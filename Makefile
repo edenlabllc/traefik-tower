@@ -58,13 +58,6 @@ run-hydra-keto:
 	JAEGER_AGENT_HOST=localhost \
 	JAEGER_AGENT_PORT=6831 go run main.go
 
-docker-keto-migration:
-	docker run -it --rm \
-      --network traefik-tower_traefik-tower \
-      -e DSN=postgres://keto:password@postgresd_keto:5432/keto \
-      oryd/keto:v0.5.6 \
-      migrate sql -e
-
 docker-hydra-get-token:
 	docker run --rm -it \
       --network traefik-tower_traefik-tower \
